@@ -231,3 +231,74 @@ def test_fake_camera_end_to_end_fits_roi_streams_and_releases_on_stop(tmp_path):
         finally:
             pipe.stop()
     assert cap.released
+
+
+# ---- warm-up: a camera that fails its first reads while waking up must not be declared dead ----
+
+def test_slow_waking_camera_is_not_given_up_on():
+    """60 failed reads (~1.8 s) before the first frame: the old ~1 s limit killed the capture thread."""
+    cap = FakeCap([False] * 60 + [True] * 5)
+    src = _source(cap)
+    assert src.warming_up                           # open, no frame yet
+    assert src.wait_first_frame(10)                 # ...and it does wake up
+    assert _drain(src, 3) >= 3 and not src.warming_up
+    src.release()
+
+
+def test_wait_first_frame_times_out_for_a_camera_that_never_delivers():
+    src = _source(FakeCap([False] * 100000))
+    assert src.warming_up and not src.wait_first_frame(0.3)
+    src.release()
+
+
+def test_no_lost_alert_or_reconnect_while_the_camera_is_still_warming_up(tmp_path):
+    pipe = BilletVisionPipeline("config/config.yaml")
+    pipe._tracker = unittest.mock.Mock()
+    pipe._source = SimpleNamespace(mode="webcam", warming_up=True, is_alive=lambda: True)
+    with unittest.mock.patch.object(pipe, "_reconnect") as rec:
+        last = pipe._on_no_frame(now=100.0, last_frame_t=90.0, last_reconnect=0.0)   # 10 s of silence
+    assert last == 0.0 and not rec.called and pipe.camera_ok
+    assert not pipe.alert_manager.history
+
+
+def test_camera_that_opens_but_never_streams_rolls_back_with_a_clear_error():
+    pipe = BilletVisionPipeline("config/config.yaml", overrides={"marker": "old"})
+    calls = []
+
+    def fake_start(*a, **k):
+        calls.append(dict(pipe.overrides))
+        pipe._source = SimpleNamespace(opened=True, wait_first_frame=lambda t: len(calls) > 1)
+
+    with unittest.mock.patch.object(pipe, "start", fake_start), unittest.mock.patch.object(pipe, "stop"):
+        with pytest.raises(SourceUnavailable, match="no frames"):
+            pipe.switch_source(inputs.camera_overrides(0), inputs.SourceInfo("camera", "Camera 0"), require_open=True)
+    assert pipe.overrides == {"marker": "old"}
+
+
+def test_api_falls_back_to_directshow_when_the_default_backend_gives_nothing(client):
+    seen = []
+
+    def fake_switch(overrides, info, require_open=False):
+        seen.append(overrides["capture"]["backend"])
+        if overrides["capture"]["backend"] is None:
+            raise SourceUnavailable("Camera 0 opened but delivered no frames")
+
+    with unittest.mock.patch("billetvision.api.main._camera_backends", return_value=[None, "dshow"]), \
+            unittest.mock.patch.object(pipeline, "switch_source", side_effect=fake_switch):
+        assert client.post("/api/source/camera").status_code == 200
+    assert seen == [None, "dshow"]
+
+
+def test_api_reports_the_error_when_every_backend_fails(client):
+    with unittest.mock.patch("billetvision.api.main._camera_backends", return_value=[None, "dshow"]), \
+            unittest.mock.patch.object(pipeline, "switch_source", side_effect=SourceUnavailable("no frames")):
+        r = client.post("/api/source/camera")
+    assert r.status_code == 422 and "no frames" in r.json()["detail"]
+
+
+def test_capture_backend_flag_is_passed_to_opencv():
+    cap = FakeCap([True] * 50)
+    with unittest.mock.patch.object(fs.cv2, "VideoCapture", return_value=cap) as vc:
+        src = FrameSource(source=0, mode="webcam", pace=False, backend="dshow").start()
+    assert vc.call_args.args == (0, cv2.CAP_DSHOW)
+    src.release()

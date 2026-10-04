@@ -6,6 +6,7 @@ import dataclasses
 import json
 import logging
 import re
+import sys
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -273,7 +274,22 @@ def use_camera(index: int = Query(default=0, ge=0, le=9)):
     cur = pipeline.source_info
     if pipeline.is_running and cur.kind == "camera" and cur.label == info.label and pipeline.camera_ok:
         return _source_status()
-    return _switch(inputs.camera_overrides(index), info, require_open=True)
+    error: Optional[HTTPException] = None
+    for backend in _camera_backends():
+        try:
+            return _switch(inputs.camera_overrides(index, backend), info, require_open=True)
+        except HTTPException as exc:
+            if exc.status_code != 422:      # a real failure, not just "this backend gave nothing"
+                raise
+            logger.warning("Camera %d via %s backend failed: %s", index, backend or "default", exc.detail)
+            error = exc
+    raise error
+
+
+def _camera_backends() -> List[Optional[str]]:
+    """Capture backends to try in order.  On Windows Media Foundation (OpenCV's default) often
+    opens a camera but never delivers frames, so DirectShow goes first."""
+    return ["dshow", "msmf"] if sys.platform == "win32" else [None]
 
 
 @app.post("/api/source/reset")
@@ -586,9 +602,12 @@ def get_alerts(n: int = Query(default=50, ge=1, le=500)):
 
 
 @app.post("/api/alerts/clear")
-def clear_active_alert():
-    """Dismiss the currently active alert banner."""
-    pipeline.alert_manager.clear_active()
+def clear_active_alert(history: bool = Query(default=False)):
+    """Dismiss the active alert banner; with ``history=true`` also clear the alert history."""
+    if history:
+        pipeline.alert_manager.clear_history()
+    else:
+        pipeline.alert_manager.clear_active()
     return {"ok": True}
 
 

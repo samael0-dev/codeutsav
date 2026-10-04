@@ -379,6 +379,13 @@ class TestAlerts:
         assert r.status_code == 200
         assert pipeline.alert_manager.active_alert is None
 
+    def test_clear_alert_history(self, client):
+        self._seed_alerts()
+        r = client.post("/api/alerts/clear?history=true")
+        assert r.status_code == 200
+        assert pipeline.alert_manager.active_alert is None
+        assert client.get("/api/alerts").json() == []
+
     def test_no_active_alert_returns_null(self, client):
         pipeline.alert_manager.active_alert = None
         r = client.get("/api/alerts/active")

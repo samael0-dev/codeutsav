@@ -93,13 +93,14 @@ def draw_billet_card(
     status: str,
     billet_id: str,
     reasons: Sequence[str],
+    mask_source: str = "classical",
 ) -> np.ndarray:
-    """Annotated snapshot of one billet: outline, mm values, ID, verdict, reasons."""
+    """Annotated snapshot of one billet: outline, mm values, ID, verdict, reasons, mask source."""
     color = STATUS_COLOR.get(status, IDLE_COLOR)
     img = color_crop.copy()
     if contour_local is not None:
         cv2.drawContours(img, [contour_local], -1, color, 2)
-    banner = [f"{billet_id}  {status}", dims_text(meas)]
+    banner = [f"{billet_id}  {status}  [mask: {mask_source}]", dims_text(meas)]
     banner += [r[:90] for r in list(reasons)[:3]]
     pad = 22 * len(banner) + 8
     canvas = np.full((img.shape[0] + pad, max(img.shape[1], 520), 3), 20, dtype=np.uint8)

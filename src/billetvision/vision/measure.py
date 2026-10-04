@@ -84,6 +84,22 @@ def _contour_to_rect_dims(
     )
 
 
+def _mean_width_px(contour: np.ndarray, length_px: float) -> float:
+    """Mean width (px) = filled pixel area / length (px), in image pixel coordinates.
+
+    minAreaRect is an envelope: on a tilted or slightly ragged edge (photo noise,
+    JPEG, staircase pixels) every 1 px bump on either side widens it.  The area
+    of a rectangle divided by its length is its exact width and barely moves
+    with such bumps, so the smaller of the two is used.
+    """
+    if length_px <= 0:
+        return float("inf")
+    x, y, w, h = cv2.boundingRect(contour)
+    mask = np.zeros((h, w), dtype=np.uint8)
+    cv2.drawContours(mask, [contour - np.array([[[x, y]]], dtype=contour.dtype)], -1, 255, cv2.FILLED)
+    return cv2.countNonZero(mask) / float(length_px)
+
+
 def _diagonal_diff_px(contour: np.ndarray) -> float:
     """Compute diagonal difference (rhomboidity) from the minAreaRect corners.
 
@@ -183,6 +199,7 @@ def measure_rect(
         Measurement with all rectangular fields populated.
     """
     length_px, width_px, _ = _contour_to_rect_dims(contour, travel_axis)
+    width_px = min(width_px, _mean_width_px(contour, length_px))
     # If height is not observable from the top view, assume square cross-section.
     h_px = height_px if height_px is not None else width_px
 

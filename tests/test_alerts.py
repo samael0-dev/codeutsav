@@ -37,6 +37,13 @@ class TestAlertManager:
         assert manager.active_alert is None
         assert len(manager.history) == 1
 
+    def test_clear_history(self):
+        manager = AlertManager()
+        manager.trigger("H123459", "FAIL", ["width out of range"])
+        manager.clear_history()
+        assert manager.active_alert is None
+        assert manager.history == []
+
 
 class TestTelegramAlerts:
     def test_telegram_disabled_without_env_vars(self):

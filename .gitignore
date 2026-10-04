@@ -46,3 +46,6 @@ data/outputs/snapshots/*
 
 # operator uploads (video/image analysis)
 data/uploads/
+
+# optional ViT model weights
+weights/

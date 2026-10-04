@@ -68,6 +68,127 @@
     sync();
   }
 
+  /* ── custom dropdowns ───────────────────────────────────────────────────
+   * Each native <select> stays in the DOM (hidden) as the source of truth, so
+   * existing code that reads .value / listens for "change" keeps working. The
+   * menu is position:fixed so it is never clipped by a card's overflow. */
+  let _openDd = null;
+
+  function _closeDropdown() {
+    if (!_openDd) return;
+    _openDd.menu.classList.add("hidden");
+    _openDd.trigger.setAttribute("aria-expanded", "false");
+    _openDd = null;
+  }
+
+  function _enhanceSelect(sel) {
+    const wrap = document.createElement("div");
+    wrap.className = "dd" + (sel.classList.contains("field-xs") ? " dd-xs" : "");
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "dd-trigger";
+    trigger.setAttribute("aria-haspopup", "listbox");
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.setAttribute("aria-label", sel.getAttribute("aria-label") || "");
+    trigger.innerHTML = `<span class="dd-label"></span>${_icon("chevron-down", "dd-chevron")}`;
+    const menu = document.createElement("ul");
+    menu.className = "dd-menu hidden";
+    menu.setAttribute("role", "listbox");
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.append(sel, trigger);
+    document.body.appendChild(menu);
+    sel.classList.add("dd-native");
+    sel.tabIndex = -1;
+    sel.setAttribute("aria-hidden", "true");
+
+    let active = -1;
+    const opts = () => Array.from(menu.children);
+    const setActive = (i) => {
+      const list = opts();
+      if (!list.length) return;
+      active = (i + list.length) % list.length;
+      list.forEach((li, k) => li.classList.toggle("active", k === active));
+      list[active].scrollIntoView({ block: "nearest" });
+    };
+
+    const sync = () => {
+      const cur = sel.options[sel.selectedIndex];
+      trigger.querySelector(".dd-label").textContent = cur ? cur.textContent : "—";
+      menu.innerHTML = Array.from(sel.options).map((o, i) =>
+        `<li class="dd-option${i === sel.selectedIndex ? " selected" : ""}" role="option" data-i="${i}"
+             aria-selected="${i === sel.selectedIndex}"><span>${_esc(o.textContent)}</span>${_icon("check", "dd-check")}</li>`).join("");
+    };
+
+    const place = () => {
+      const r = trigger.getBoundingClientRect();
+      menu.style.minWidth = `${Math.max(r.width, 140)}px`;
+      const h = menu.offsetHeight;
+      const below = window.innerHeight - r.bottom;
+      menu.style.top = `${below < h + 8 && r.top > h + 8 ? r.top - h - 4 : r.bottom + 4}px`;
+      if (sel.dataset.align === "right") { menu.style.left = "auto"; menu.style.right = `${window.innerWidth - r.right}px`; }
+      else { menu.style.right = "auto"; menu.style.left = `${r.left}px`; }
+    };
+
+    const open = () => {
+      _closeDropdown();
+      sync();
+      menu.classList.remove("hidden");
+      trigger.setAttribute("aria-expanded", "true");
+      place();
+      setActive(Math.max(0, sel.selectedIndex));
+      _openDd = { menu, trigger };
+    };
+
+    const choose = (i) => {
+      if (i >= 0 && i !== sel.selectedIndex) {
+        sel.selectedIndex = i;
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      sync();
+      _closeDropdown();
+      trigger.focus();
+    };
+
+    trigger.addEventListener("click", () => (_openDd && _openDd.menu === menu ? _closeDropdown() : open()));
+    trigger.addEventListener("keydown", (e) => {
+      const isOpen = _openDd && _openDd.menu === menu;
+      if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key) && !isOpen) { e.preventDefault(); open(); return; }
+      if (!isOpen) return;
+      if (e.key === "ArrowDown") { e.preventDefault(); setActive(active + 1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); setActive(active - 1); }
+      else if (e.key === "Home") { e.preventDefault(); setActive(0); }
+      else if (e.key === "End") { e.preventDefault(); setActive(-1); }
+      else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(active); }
+      else if (e.key === "Escape" || e.key === "Tab") { e.stopPropagation(); _closeDropdown(); }
+    });
+    menu.addEventListener("mousedown", (e) => e.preventDefault());   // keep focus on the trigger
+    menu.addEventListener("click", (e) => {
+      const li = e.target.closest(".dd-option");
+      if (li) choose(+li.dataset.i);
+    });
+    menu.addEventListener("mousemove", (e) => {
+      const li = e.target.closest(".dd-option");
+      if (li && +li.dataset.i !== active) setActive(+li.dataset.i);
+    });
+
+    // Options filled or value set from code (e.g. the tolerance profile list)
+    new MutationObserver(sync).observe(sel, { childList: true, subtree: true, characterData: true });
+    sel.addEventListener("change", sync);
+    sync();
+  }
+
+  function _initDropdowns() {
+    document.querySelectorAll("select.field").forEach(_enhanceSelect);
+    document.addEventListener("mousedown", (e) => {
+      if (_openDd && !_openDd.menu.contains(e.target) && !_openDd.trigger.contains(e.target)) _closeDropdown();
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") _closeDropdown(); });
+    window.addEventListener("resize", _closeDropdown);
+    window.addEventListener("scroll", (e) => {
+      if (_openDd && !_openDd.menu.contains(e.target)) _closeDropdown();
+    }, true);
+  }
+
   /* ── state ──────────────────────────────────────────────────────────── */
   let _lastRecord = null;         // most-recent inspection result
   let _lastSeenSeq = -1;          // sequence deduplication guard
@@ -95,6 +216,55 @@
   }
   function _alarmBeep()  { _beep(440, 0.4, "sawtooth"); }
   function _passBeep()   { _beep(1046, 0.12, "sine"); }
+
+  /* ── voice alerts (browser speechSynthesis — no dependency) ─────────── */
+  let _voiceOn = true;
+  try { _voiceOn = localStorage.getItem("bv-voice") !== "off"; } catch (_) {}
+
+  function _initVoice() {
+    const btn = document.getElementById("voice-toggle");
+    if (!btn) return;
+    if (!("speechSynthesis" in window)) { btn.classList.add("hidden"); return; }
+    const sync = () => {
+      btn.setAttribute("aria-pressed", String(_voiceOn));
+      btn.title = `Voice alerts: ${_voiceOn ? "on" : "off"}`;
+    };
+    sync();
+    btn.addEventListener("click", () => {
+      _voiceOn = !_voiceOn;
+      if (!_voiceOn) window.speechSynthesis.cancel();
+      try { localStorage.setItem("bv-voice", _voiceOn ? "on" : "off"); } catch (_) {}
+      sync();
+    });
+  }
+
+  function _speak(text) {
+    if (!_voiceOn || !text) return;
+    try {
+      const synth = window.speechSynthesis;
+      synth.cancel();   // latest billet wins; never let a backlog build up
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.05;
+      synth.speak(u);
+    } catch (_) { /* speech unavailable — no crash */ }
+  }
+
+  /** Short spoken phrase for one reason, e.g. "width over tolerance". */
+  function _spokenReason(reason) {
+    const s = String(reason);
+    const label = (s.match(/^[^\d(<>]*/)[0] || "").replace(/_/g, " ").trim();
+    const range = s.match(/^[^\d]*?(-?[\d.]+)\s*\w*\s+out of range \((-?[\d.]+)/);
+    if (range) return `${label} ${+range[1] > +range[2] ? "over" : "under"} tolerance`;
+    if (/>\s*limit/.test(s)) return `${label} over limit`;
+    return label || s;
+  }
+
+  function _speakVerdict(msg) {
+    const who = msg.billet_seq != null ? `Billet ${msg.billet_seq}` : "Billet";
+    const first = _reasons(msg)[0];
+    const why = msg.status === "REVIEW" ? "needs review" : (first ? _spokenReason(first) : "");
+    _speak(`${who} ${msg.status}${why ? ", " + why : ""}.`);
+  }
 
   /* ── WebSocket ──────────────────────────────────────────────────────── */
   const _wsUrl = (() => {
@@ -164,7 +334,7 @@
   /* ── KPI update ─────────────────────────────────────────────────────── */
   function _onKpi(msg) {
     _setText("kpi-fps",       _fmt(msg.fps, 1));
-    _setText("kpi-latency",   msg.latency_ms != null ? `${msg.latency_ms.toFixed(0)} ms` : "—");
+    _setText("kpi-latency",   msg.latency_ms != null ? msg.latency_ms.toFixed(0) : "—");
     _setText("kpi-total",     msg.total ?? "—");
     _setText("kpi-pass-rate", msg.pass_rate != null ? `${(msg.pass_rate * 100).toFixed(1)}%` : "—");
     _setText("kpi-ocr-rate",  msg.ocr_rate  != null ? `${(msg.ocr_rate  * 100).toFixed(1)}%` : "—");
@@ -180,8 +350,8 @@
     _updateMeasDetails(msg);
     _prependLogRow(msg, true);
 
-    if (msg.status === "FAIL" || msg.status === "REWORK") { _alarmBeep(); _showAlertBanner(msg); }
-    else if (msg.status === "REVIEW") { _beep(660, 0.2, "triangle"); _showAlertBanner(msg); }
+    if (msg.status === "FAIL" || msg.status === "REWORK") { _alarmBeep(); _showAlertBanner(msg); _speakVerdict(msg); }
+    else if (msg.status === "REVIEW") { _beep(660, 0.2, "triangle"); _showAlertBanner(msg); _speakVerdict(msg); }
     else if (msg.status === "PASS") {
       _passBeep();
       // a PASS must not hide a still-relevant system alert (e.g. camera lost)
@@ -208,6 +378,8 @@
     _setStatusIcon(msg.status);
     text.textContent = msg.status || "?";
     subid.textContent = msg.billet_id || "—";
+    const time = msg.timestamp ? String(msg.timestamp).replace("T", " ").slice(11, 19) : "";
+    _setText("status-meta", [msg.billet_seq != null ? `#${msg.billet_seq}` : "", time].filter(Boolean).join(" · "));
   }
 
   function _updateMeasDetails(msg) {
@@ -220,6 +392,13 @@
     _setText("m-diag",   fmt(msg.diag_diff_mm));
     _setText("m-ocr",    msg.ocr_confidence != null ? `${(msg.ocr_confidence * 100).toFixed(0)}%` : "—");
     _setText("m-ms",     msg.processing_ms  != null ? `${(+msg.processing_ms).toFixed(0)} ms` : "—");
+
+    // Show only the fields that apply to this billet's shape (idle: show the rectangular set)
+    const idle = msg.length_mm == null && msg.width_mm == null && msg.diameter_mm == null;
+    document.querySelectorAll("#meas-dl [data-opt]").forEach(el => {
+      const val = el.querySelector(".mt-val, dd");
+      el.classList.toggle("hidden", idle ? el.dataset.opt === "round" : (val && val.textContent === "—"));
+    });
 
     const reasons = _reasons(msg);
     const box  = document.getElementById("fail-reasons-box");
@@ -281,7 +460,7 @@
     // inspection_result message; system alerts (camera, duplicate ID) only arrive here.
     if (!msg.kind || msg.kind === "billet") return;
     _showAlertBanner(msg);
-    if (msg.sound !== false) _alarmBeep();
+    if (msg.sound !== false) { _alarmBeep(); _speak(String(msg.status || "System alert").replace(/_/g, " ")); }
   }
 
   /* ── Log table ──────────────────────────────────────────────────────── */
@@ -317,16 +496,16 @@
 
     tbody.innerHTML = _logRows.map(r => `
       <tr class="${r._isNew ? 'new-row' : ''}">
-        <td class="mono" style="white-space:nowrap">${_esc(_fmtTime(r.timestamp))}</td>
-        <td class="mono">${r.billet_seq ?? "—"}</td>
-        <td class="mono"><strong>${_esc(r.billet_id || "UNKNOWN")}</strong></td>
-        <td class="mono">${_fmtDims(r)}</td>
-        <td class="mono">${_fmtOval(r)}</td>
-        <td class="mono">${_fmtDiag(r)}</td>
-        <td class="mono">${r.ocr_confidence != null ? (r.ocr_confidence*100).toFixed(0)+"%" : "—"}</td>
+        <td class="muted">${_esc(_fmtTime(r.timestamp))}</td>
+        <td class="num">${r.billet_seq ?? "—"}</td>
+        <td class="id">${_esc(r.billet_id || "UNKNOWN")}</td>
         <td><span class="badge-status badge-${(r.status||"").toLowerCase()}">${_esc(r.status||"—")}</span></td>
-        <td style="max-width:200px;white-space:normal;font-size:0.78rem">${_esc(_reasons(r).join("; ")||"—")}</td>
-        <td><button class="btn btn-sm btn-ghost" data-drill="${r.billet_seq}">${_icon("expand")}Details</button></td>
+        <td class="num">${_fmtDims(r)}</td>
+        <td class="num">${_fmtOval(r)}</td>
+        <td class="num">${_fmtDiag(r)}</td>
+        <td class="num">${r.ocr_confidence != null ? (r.ocr_confidence*100).toFixed(0)+"%" : "—"}</td>
+        <td class="reasons">${_esc(_reasons(r).join("; ")||"—")}</td>
+        <td><button class="icon-btn" data-drill="${r.billet_seq}" title="Details" aria-label="Details">${_icon("expand")}</button></td>
       </tr>`).join("");
 
     // Attach drill-down handlers (the modal loads the full record from the API)
@@ -618,7 +797,7 @@
         const reasons = (a.reasons || []).slice(0, 2).join("; ");
         return `<li class="alert-item ${(a.status||"").toLowerCase()}">
           ${_icon(_STATUS_ICON[(a.status || "").toUpperCase()] || "alert")}
-          <span class="alert-item-time">${_esc(_fmtTime(a.timestamp))}</span>
+          <span class="alert-item-time">${_esc(_fmtTime(a.timestamp).slice(11) || "—")}</span>
           <span class="alert-item-id">${_esc(a.billet_id||"?")}</span>
           <span class="alert-item-body">${_esc(reasons) || a.status}</span>
         </li>`;
@@ -640,6 +819,15 @@
     try {
       await fetch("/api/alerts/clear", { method: "POST" });
       _hideAlertBanner();
+    } catch (_) {}
+  }
+
+  async function _clearAlertHistory() {
+    try {
+      await fetch("/api/alerts/clear?history=true", { method: "POST" });
+      _hideAlertBanner();
+      const list = document.getElementById("alert-history-list");
+      if (list) list.innerHTML = `<li class="alert-empty">No alerts</li>`;
     } catch (_) {}
   }
 
@@ -803,6 +991,7 @@
     _setStatusIcon("IDLE");
     _setText("status-text", "WAITING");
     _setText("status-billet-id", "—");
+    _setText("status-meta", "");
     _updateMeasDetails({});
     _hideAlertBanner();
     _reattachStream();           // always start the new source on a fresh video connection
@@ -812,7 +1001,10 @@
 
   function _renderSource(src) {
     document.querySelectorAll(".source-select .seg").forEach(b => b.classList.toggle("active", b.dataset.kind === src.kind));
-    _setText("src-label", `Source: ${_KIND_NAME[src.kind] || src.kind} — ${src.label}`);
+    const kind = _KIND_NAME[src.kind] || src.kind;
+    const kindWord = kind.split(" ").pop().toLowerCase();
+    _setText("src-label", !src.label ? kind
+      : String(src.label).toLowerCase().includes(kindWord) ? src.label : `${kind} · ${src.label}`);
     const bs = src.by_status || {};
     const counts = `${src.results} billet${src.results === 1 ? "" : "s"} (` +
       `${bs.PASS || 0} pass, ${bs.FAIL || 0} fail, ${bs.REWORK || 0} rework, ${bs.REVIEW || 0} review)`;
@@ -1004,6 +1196,8 @@
   /* ── Init ────────────────────────────────────────────────────────────── */
   function init() {
     _initTheme();
+    _initDropdowns();
+    _initVoice();
     _initStreamPill();
     _initTabs();
     _initSource();
@@ -1018,7 +1212,7 @@
 
     // Alert banner dismiss
     document.getElementById("alert-dismiss")?.addEventListener("click", _clearActiveAlert);
-    document.getElementById("clear-alerts-btn")?.addEventListener("click", _clearActiveAlert);
+    document.getElementById("clear-alerts-btn")?.addEventListener("click", _clearAlertHistory);
 
     // Log filters
     let _idDebounce = null;

@@ -123,6 +123,12 @@ class AlertManager:
     def clear_active(self) -> None:
         self.active_alert = None
 
+    def clear_history(self) -> None:
+        """Dismiss the active alert and drop the history (debounce state is kept)."""
+        with self._lock:
+            self.history.clear()
+            self.active_alert = None
+
     def reset(self) -> None:
         """Forget all alerts (a new input source starts with a clean slate)."""
         with self._lock:

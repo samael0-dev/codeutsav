@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BilletVision — Operator Dashboard</title>
+  <title>BilletVision</title>
   <script>
     /* Apply the theme before first paint (no flash). Falls back to the OS setting. */
     (function () {
@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/static/styles.css?v=10">
+  <link rel="stylesheet" href="/static/styles.css?v=18">
 </head>
 <body>
 
@@ -36,6 +36,7 @@
       <symbol id="i-sliders" viewBox="0 0 24 24"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></symbol>
       <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
       <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+      <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
       <symbol id="i-circle-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
       <symbol id="i-circle-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
       <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
@@ -49,52 +50,43 @@
       <symbol id="i-save" viewBox="0 0 24 24"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></symbol>
       <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
       <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+      <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol>
+      <symbol id="i-volume-x" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></symbol>
       <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
     </defs>
   </svg>
 
-  <!-- ── Alert Banner ─────────────────────────────────────────────────────── -->
+  <!-- ── Alert banner ─────────────────────────────────────────────────────── -->
   <div id="alert-banner" class="alert-banner hidden" role="alert" aria-live="assertive">
-    <span id="alert-icon" class="alert-icon"><svg class="icon icon-lg"><use href="#i-alert"/></svg></span>
+    <span id="alert-icon" class="alert-icon"><svg class="icon"><use href="#i-alert"/></svg></span>
     <div class="alert-body">
-      <strong id="alert-title">OUT OF TOLERANCE</strong>
+      <strong id="alert-title">Out of tolerance</strong>
       <span id="alert-detail"></span>
     </div>
-    <button id="alert-dismiss" class="icon-btn alert-dismiss" aria-label="Dismiss alert"><svg class="icon"><use href="#i-x"/></svg></button>
+    <button id="alert-dismiss" class="alert-dismiss" aria-label="Dismiss alert">Dismiss</button>
   </div>
 
   <!-- ── App bar ──────────────────────────────────────────────────────────── -->
   <header class="appbar">
     <div class="appbar-inner">
-      <div class="brand">
-        <div class="brand-mark"><svg class="icon icon-lg"><use href="#i-scan"/></svg></div>
-        <div class="brand-text">
-          <h1 class="brand-title">BilletVision</h1>
-          <p class="brand-sub">Billet inspection &amp; traceability</p>
-        </div>
-      </div>
-
       <nav class="tabs" role="tablist" aria-label="Sections">
-        <button class="tab-btn active" data-tab="live" role="tab" aria-selected="true">
-          <svg class="icon"><use href="#i-activity"/></svg><span>Live</span>
-        </button>
-        <button class="tab-btn" data-tab="log" role="tab" aria-selected="false">
-          <svg class="icon"><use href="#i-list"/></svg><span>Audit log</span>
-        </button>
+        <button class="tab-btn active" data-tab="live" role="tab" aria-selected="true">Live</button>
+        <button class="tab-btn" data-tab="log" role="tab" aria-selected="false">Audit log</button>
         <button class="tab-btn" data-tab="review" role="tab" aria-selected="false">
-          <svg class="icon"><use href="#i-eye"/></svg><span>Review queue</span>
-          <span id="review-badge" class="tab-badge hidden">0</span>
+          Review<span id="review-badge" class="tab-badge hidden">0</span>
         </button>
-        <button class="tab-btn" data-tab="tolerances" role="tab" aria-selected="false">
-          <svg class="icon"><use href="#i-sliders"/></svg><span>Tolerances</span>
-        </button>
+        <button class="tab-btn" data-tab="tolerances" role="tab" aria-selected="false">Tolerances</button>
       </nav>
 
       <div class="appbar-end">
-        <div class="conn-group" title="Event stream connection">
+        <div class="conn-chip" title="Event stream connection">
           <span id="ws-dot" class="ws-dot disconnected"></span>
           <span id="ws-label" class="ws-label">Connecting…</span>
         </div>
+        <button id="voice-toggle" class="icon-btn" aria-label="Toggle voice alerts" aria-pressed="true" title="Voice alerts: on">
+          <svg class="icon icon-voice-on"><use href="#i-volume"/></svg>
+          <svg class="icon icon-voice-off"><use href="#i-volume-x"/></svg>
+        </button>
         <button id="theme-toggle" class="icon-btn" aria-label="Toggle colour theme" title="Toggle theme">
           <svg class="icon icon-sun"><use href="#i-sun"/></svg>
           <svg class="icon icon-moon"><use href="#i-moon"/></svg>
@@ -105,27 +97,27 @@
 
   <main class="page">
 
-    <!-- ── KPI strip ──────────────────────────────────────────────────────── -->
-    <section class="kpi-strip" aria-label="Key metrics">
-      <div class="kpi-card">
-        <span class="kpi-label">Frame rate</span>
+    <!-- ── KPI bar ────────────────────────────────────────────────────────── -->
+    <section class="kpi-bar" aria-label="Key metrics">
+      <div class="kpi">
+        <span class="kpi-label">Throughput</span>
         <span class="kpi-line"><span id="kpi-fps" class="kpi-val">—</span><span class="kpi-unit">fps</span></span>
       </div>
-      <div class="kpi-card">
+      <div class="kpi">
         <span class="kpi-label">Latency</span>
-        <span id="kpi-latency" class="kpi-val">— ms</span>
+        <span class="kpi-line"><span id="kpi-latency" class="kpi-val">—</span><span class="kpi-unit">ms</span></span>
       </div>
-      <div class="kpi-card">
+      <div class="kpi">
         <span class="kpi-label">Inspected</span>
-        <span id="kpi-total" class="kpi-val">0</span>
+        <span class="kpi-line"><span id="kpi-total" class="kpi-val">0</span></span>
       </div>
-      <div class="kpi-card">
+      <div class="kpi">
         <span class="kpi-label">Pass rate</span>
-        <span id="kpi-pass-rate" class="kpi-val">—</span>
+        <span class="kpi-line"><span id="kpi-pass-rate" class="kpi-val">—</span></span>
       </div>
-      <div class="kpi-card">
+      <div class="kpi">
         <span class="kpi-label">OCR read rate</span>
-        <span id="kpi-ocr-rate" class="kpi-val">—</span>
+        <span class="kpi-line"><span id="kpi-ocr-rate" class="kpi-val">—</span></span>
       </div>
     </section>
 
@@ -134,87 +126,100 @@
       <div class="live-grid">
 
         <!-- Video feed -->
-        <section class="card video-panel">
-          <div class="card-header">
-            <h2 class="card-title">Live feed</h2>
-            <span class="pill" id="stream-pill"><span class="pill-dot"></span><span id="stream-status" class="stream-status">Connecting…</span></span>
+        <section class="card card-flush video-panel">
+          <div class="card-head">
+            <div class="card-head-title">
+              <h2 class="card-title">Live feed</h2>
+              <span class="pill" id="stream-pill"><span class="pill-dot"></span><span id="stream-status">Connecting…</span></span>
+            </div>
+            <div class="source-select" role="group" aria-label="Input source">
+              <button id="src-camera-btn" class="seg" data-kind="camera" title="Live camera"><svg class="icon"><use href="#i-camera"/></svg>Camera</button>
+              <button id="src-video-btn" class="seg" data-kind="video" title="Analyse a recorded video"><svg class="icon"><use href="#i-video"/></svg>Video</button>
+              <button id="src-image-btn" class="seg" data-kind="image" title="Analyse a photo"><svg class="icon"><use href="#i-image"/></svg>Image</button>
+              <button id="src-demo-btn" class="seg" data-kind="demo" title="Simulated conveyor"><svg class="icon"><use href="#i-play"/></svg>Demo</button>
+              <input id="src-video-input" type="file" accept="video/*,.mp4,.avi,.mov,.mkv,.webm,.m4v" hidden>
+              <input id="src-image-input" type="file" accept="image/*" hidden>
+            </div>
           </div>
+
           <div class="video-frame">
             <img id="live-stream" src="/video" alt="Live annotated feed"
                  onload="document.getElementById('stream-status').textContent='Streaming'"
                  onerror="document.getElementById('stream-status').textContent='Offline'">
           </div>
+          <div id="src-progress" class="src-progress hidden"><div id="src-progress-bar"></div></div>
 
-          <!-- Input source -->
           <div class="source-bar">
-            <div class="source-select" role="group" aria-label="Input source">
-              <button id="src-camera-btn" class="seg" data-kind="camera" title="Analyse the live camera"><svg class="icon"><use href="#i-camera"/></svg>Camera</button>
-              <button id="src-video-btn" class="seg" data-kind="video" title="Pick a recorded video to analyse"><svg class="icon"><use href="#i-video"/></svg>Upload video</button>
-              <button id="src-image-btn" class="seg" data-kind="image" title="Pick a photo to analyse"><svg class="icon"><use href="#i-image"/></svg>Upload image</button>
-              <button id="src-demo-btn" class="seg" data-kind="demo" title="Simulated conveyor with known billets"><svg class="icon"><use href="#i-play"/></svg>Demo</button>
-              <input id="src-video-input" type="file" accept="video/*,.mp4,.avi,.mov,.mkv,.webm,.m4v" hidden>
-              <input id="src-image-input" type="file" accept="image/*" hidden>
+            <div class="source-status">
+              <span id="src-label" class="source-label">—</span>
+              <span id="src-detail" class="source-detail"></span>
             </div>
-            <label class="cam-index" title="Which camera the Camera button opens">Camera #
-              <select id="src-camera-index" class="filter-select" aria-label="Camera index">
-                <option value="0">0 (default)</option><option value="1">1</option>
+            <label class="cam-index" title="Camera opened by the Camera button">
+              <span>Camera</span>
+              <select id="src-camera-index" class="field field-select field-xs" aria-label="Camera index" data-align="right">
+                <option value="0">0</option><option value="1">1</option>
                 <option value="2">2</option><option value="3">3</option>
               </select>
             </label>
-            <div class="source-status">
-              <span id="src-label" class="source-label">Source: &mdash;</span>
-              <span id="src-detail" class="source-detail"></span>
-            </div>
-            <div id="src-progress" class="src-progress hidden"><div id="src-progress-bar"></div></div>
-            <div id="src-message" class="tol-status hidden"></div>
           </div>
+          <div id="src-message" class="tol-status inset hidden"></div>
         </section>
 
         <!-- Right column -->
         <div class="live-right">
 
-          <!-- Verdict -->
-          <section class="card status-panel" id="status-panel">
+          <!-- Latest inspection: verdict + measurements -->
+          <section class="card card-flush inspection-panel">
+            <div class="card-head">
+              <h2 class="card-title">Latest inspection</h2>
+              <button id="drill-last-btn" class="btn btn-sm btn-ghost" title="Full drill-down">Details<svg class="icon"><use href="#i-expand"/></svg></button>
+            </div>
+
             <div id="status-tile" class="status-tile idle">
               <span id="status-icon" class="status-icon"><svg class="icon icon-xl"><use href="#i-clock"/></svg></span>
               <div class="status-main">
-                <div class="status-caption">Latest verdict</div>
                 <div id="status-text" class="status-text">WAITING</div>
-                <div id="status-billet-id" class="status-billet-id">—</div>
+                <div class="status-sub">
+                  <span id="status-billet-id" class="status-billet-id">—</span>
+                  <span id="status-meta" class="status-meta"></span>
+                </div>
+              </div>
+            </div>
+
+            <div id="fail-reasons-box" class="fail-reasons hidden">
+              <ul id="fail-reasons-list"></ul>
+            </div>
+
+            <div class="meas" id="meas-dl">
+              <div class="meas-group">
+                <h3 class="meas-heading">Dimensions</h3>
+                <div class="meas-tiles">
+                  <div class="mt"><span class="mt-label">Length</span><span id="m-length" class="mt-val">—</span></div>
+                  <div class="mt" data-opt="rect"><span class="mt-label">Width</span><span id="m-width" class="mt-val">—</span></div>
+                  <div class="mt" data-opt="rect"><span class="mt-label">Height</span><span id="m-height" class="mt-val">—</span></div>
+                  <div class="mt" data-opt="round"><span class="mt-label">Diameter</span><span id="m-diam" class="mt-val">—</span></div>
+                </div>
+              </div>
+              <div class="meas-group">
+                <h3 class="meas-heading">Geometry &amp; process</h3>
+                <dl class="meas-list">
+                  <div data-opt="rect"><dt>Diagonal diff.</dt><dd id="m-diag">—</dd></div>
+                  <div data-opt="round"><dt>Ovality</dt><dd id="m-oval">—</dd></div>
+                  <div><dt>OCR confidence</dt><dd id="m-ocr">—</dd></div>
+                  <div><dt>Processing time</dt><dd id="m-ms">—</dd></div>
+                </dl>
               </div>
             </div>
           </section>
 
-          <!-- Measurements -->
-          <section class="card details-panel">
-            <div class="card-header">
-              <h2 class="card-title">Measurements</h2>
-              <button id="drill-last-btn" class="btn btn-sm btn-ghost" title="Full drill-down"><svg class="icon"><use href="#i-expand"/></svg>Details</button>
-            </div>
-            <dl class="meas-grid" id="meas-dl">
-              <dt>Length</dt>      <dd id="m-length">—</dd>
-              <dt>Width</dt>       <dd id="m-width">—</dd>
-              <dt>Height</dt>      <dd id="m-height">—</dd>
-              <dt>Diameter</dt>    <dd id="m-diam">—</dd>
-              <dt>Ovality</dt>     <dd id="m-oval">—</dd>
-              <dt>Diagonal diff.</dt><dd id="m-diag">—</dd>
-              <dt>OCR confidence</dt><dd id="m-ocr">—</dd>
-              <dt>Processing</dt>  <dd id="m-ms">—</dd>
-            </dl>
-            <div id="fail-reasons-box" class="fail-reasons hidden">
-              <p class="fail-reasons-label"><svg class="icon"><use href="#i-alert"/></svg>Why it was flagged</p>
-              <ul id="fail-reasons-list"></ul>
-            </div>
-          </section>
-
           <!-- Alerts -->
-          <section class="card alerts-panel">
-            <div class="card-header">
-              <h2 class="card-title">Alert history</h2>
-              <button id="clear-alerts-btn" class="btn btn-sm btn-ghost" title="Dismiss the active alert"><svg class="icon"><use href="#i-x"/></svg>Clear active</button>
+          <section class="card card-flush alerts-panel">
+            <div class="card-head">
+              <h2 class="card-title">Alerts</h2>
+              <button id="clear-alerts-btn" class="btn btn-sm btn-ghost" title="Dismiss the active alert and clear the history">Clear</button>
             </div>
             <ul id="alert-history-list" class="alert-list">
-              <li class="alert-empty">No alerts yet.</li>
+              <li class="alert-empty">No alerts</li>
             </ul>
           </section>
 
@@ -223,15 +228,14 @@
     </div><!-- tab-live -->
 
 
-    <!-- ── Tab: Audit Log ──────────────────────────────────────────────────── -->
+    <!-- ── Tab: Audit log ──────────────────────────────────────────────────── -->
     <div id="tab-log" class="tab-panel hidden">
-      <section class="card">
-        <div class="card-header">
-          <h2 class="card-title">Inspection audit log</h2>
+      <section class="card card-flush">
+        <div class="card-head">
           <div class="toolbar">
             <label class="input-icon">
               <svg class="icon"><use href="#i-search"/></svg>
-              <input id="log-filter-id" type="text" class="field" placeholder="Filter by billet ID">
+              <input id="log-filter-id" type="text" class="field" placeholder="Search billet ID">
             </label>
             <select id="log-filter-status" class="field field-select" aria-label="Filter by status">
               <option value="">All statuses</option>
@@ -240,25 +244,29 @@
               <option value="REWORK">Rework</option>
               <option value="REVIEW">Review</option>
             </select>
-            <button id="log-refresh-btn" class="btn btn-sm"><svg class="icon"><use href="#i-refresh"/></svg>Refresh</button>
-            <span class="toolbar-sep"></span>
-            <a href="/api/export/csv" id="export-csv-btn" class="btn btn-sm" download><svg class="icon"><use href="#i-download"/></svg>CSV</a>
-            <a href="/api/export/xlsx" id="export-xlsx-btn" class="btn btn-sm" download><svg class="icon"><use href="#i-download"/></svg>XLSX</a>
-            <a href="/api/export/json" id="export-json-btn" class="btn btn-sm" download><svg class="icon"><use href="#i-download"/></svg>JSON</a>
+            <button id="log-refresh-btn" class="icon-btn" title="Refresh" aria-label="Refresh"><svg class="icon"><use href="#i-refresh"/></svg></button>
+          </div>
+          <div class="toolbar">
+            <span class="toolbar-label">Export</span>
+            <div class="btn-group">
+              <a href="/api/export/csv" id="export-csv-btn" class="btn btn-sm" download>CSV</a>
+              <a href="/api/export/xlsx" id="export-xlsx-btn" class="btn btn-sm" download>XLSX</a>
+              <a href="/api/export/json" id="export-json-btn" class="btn btn-sm" download>JSON</a>
+            </div>
           </div>
         </div>
         <div class="table-wrap">
           <table class="data-table" id="log-table">
             <thead>
               <tr>
-                <th>Timestamp</th>
-                <th>Seq</th>
+                <th>Time</th>
+                <th class="num">Seq</th>
                 <th>Billet ID</th>
-                <th>L × W × H (mm)</th>
-                <th>Ø / Ovality</th>
-                <th>Diag. diff.</th>
-                <th>OCR</th>
                 <th>Status</th>
+                <th class="num">L × W × H (mm)</th>
+                <th class="num">Ø / Ovality</th>
+                <th class="num">Diag.</th>
+                <th class="num">OCR</th>
                 <th>Reasons</th>
                 <th><span class="sr-only">Actions</span></th>
               </tr>
@@ -275,119 +283,104 @@
     </div>
 
 
-    <!-- ── Tab: Review Queue ───────────────────────────────────────────────── -->
+    <!-- ── Tab: Review queue ───────────────────────────────────────────────── -->
     <div id="tab-review" class="tab-panel hidden">
-      <section class="card">
-        <div class="card-header">
-          <div>
-            <h2 class="card-title">Review queue</h2>
-            <p class="card-sub">Billets whose ID could not be read with confidence. Confirm or correct the ID.</p>
-          </div>
-          <button id="review-refresh-btn" class="btn btn-sm"><svg class="icon"><use href="#i-refresh"/></svg>Refresh</button>
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">Review queue</h2>
+          <p class="section-sub">IDs read with low confidence. Confirm or correct each one.</p>
         </div>
-        <div id="review-cards" class="review-cards">
-          <p class="table-empty">No pending reviews.</p>
-        </div>
-      </section>
+        <button id="review-refresh-btn" class="icon-btn" title="Refresh" aria-label="Refresh"><svg class="icon"><use href="#i-refresh"/></svg></button>
+      </div>
+      <div id="review-cards" class="review-cards">
+        <p class="table-empty">No pending reviews.</p>
+      </div>
     </div>
 
 
-    <!-- ── Tab: Tolerances ─────────────────────────────────────────────────── -->
+    <!-- ── Tab: Settings (tolerances + calibration) ────────────────────────── -->
     <div id="tab-tolerances" class="tab-panel hidden">
-      <section class="card">
-        <div class="card-header">
-          <div>
-            <h2 class="card-title">Tolerance configuration</h2>
-            <p class="card-sub">All limits are in millimetres unless stated otherwise.</p>
+      <section class="card card-flush">
+        <div class="card-head">
+          <div class="card-head-title">
+            <h2 class="card-title">Tolerances</h2>
+            <span id="active-profile-badge" class="pill pill-ok hidden"><span class="pill-dot"></span>Active: <strong id="active-profile-name">—</strong></span>
           </div>
           <div class="toolbar">
-            <label class="inline-label">Profile
-              <select id="profile-select" class="field field-select"></select>
-            </label>
-            <button id="activate-profile-btn" class="btn btn-sm"><svg class="icon"><use href="#i-check"/></svg>Activate</button>
-            <button id="save-tol-btn" class="btn btn-sm btn-primary"><svg class="icon"><use href="#i-save"/></svg>Save changes</button>
+            <select id="profile-select" class="field field-select" aria-label="Profile"></select>
+            <button id="activate-profile-btn" class="btn btn-sm">Activate</button>
+            <button id="save-tol-btn" class="btn btn-sm btn-primary">Save changes</button>
           </div>
-        </div>
-
-        <div id="active-profile-badge" class="active-profile-badge hidden">
-          <svg class="icon"><use href="#i-circle-check"/></svg>Active profile: <strong id="active-profile-name">—</strong>
         </div>
 
         <form id="tol-form" class="tol-form" onsubmit="return false">
-          <fieldset class="tol-fieldset" id="fs-rect">
-            <legend>Rectangular billet</legend>
-            <div class="tol-row">
-              <label>Nominal width (mm)<input type="number" id="tol-width-nom" step="0.1" min="0"></label>
-              <label>Width tolerance ± (mm)<input type="number" id="tol-width-tol" step="0.1" min="0"></label>
-            </div>
-            <div class="tol-row">
-              <label>Nominal height (mm)<input type="number" id="tol-height-nom" step="0.1" min="0"></label>
-              <label>Height tolerance ± (mm)<input type="number" id="tol-height-tol" step="0.1" min="0"></label>
-            </div>
-            <div class="tol-row">
-              <label>Nominal length (mm)<input type="number" id="tol-length-nom" step="1" min="0"></label>
-              <label>Length tolerance ± (mm)<input type="number" id="tol-length-tol" step="1" min="0"></label>
-            </div>
-          </fieldset>
+          <div class="tol-section">
+            <h3 class="tol-heading">Rectangular</h3>
+            <div class="param-head"><span>Parameter</span><span>Nominal</span><span>Tolerance ±</span></div>
+            <div class="param-row"><span class="param-name">Width</span>
+              <label class="unit-input"><input type="number" id="tol-width-nom" step="0.1" min="0" aria-label="Nominal width"><span>mm</span></label>
+              <label class="unit-input"><input type="number" id="tol-width-tol" step="0.1" min="0" aria-label="Width tolerance"><span>mm</span></label></div>
+            <div class="param-row"><span class="param-name">Height</span>
+              <label class="unit-input"><input type="number" id="tol-height-nom" step="0.1" min="0" aria-label="Nominal height"><span>mm</span></label>
+              <label class="unit-input"><input type="number" id="tol-height-tol" step="0.1" min="0" aria-label="Height tolerance"><span>mm</span></label></div>
+            <div class="param-row"><span class="param-name">Length</span>
+              <label class="unit-input"><input type="number" id="tol-length-nom" step="1" min="0" aria-label="Nominal length"><span>mm</span></label>
+              <label class="unit-input"><input type="number" id="tol-length-tol" step="1" min="0" aria-label="Length tolerance"><span>mm</span></label></div>
+          </div>
 
-          <fieldset class="tol-fieldset" id="fs-round">
-            <legend>Round billet</legend>
-            <div class="tol-row">
-              <label>Nominal diameter (mm)<input type="number" id="tol-diam-nom" step="0.1" min="0"></label>
-              <label>Diameter tolerance ± (mm)<input type="number" id="tol-diam-tol" step="0.1" min="0"></label>
-            </div>
-            <div class="tol-row">
-              <label>Max ovality (%)<input type="number" id="tol-ovality" step="0.1" min="0"></label>
-            </div>
-          </fieldset>
+          <div class="tol-section">
+            <h3 class="tol-heading">Round</h3>
+            <div class="param-head"><span>Parameter</span><span>Nominal</span><span>Tolerance ±</span></div>
+            <div class="param-row"><span class="param-name">Diameter</span>
+              <label class="unit-input"><input type="number" id="tol-diam-nom" step="0.1" min="0" aria-label="Nominal diameter"><span>mm</span></label>
+              <label class="unit-input"><input type="number" id="tol-diam-tol" step="0.1" min="0" aria-label="Diameter tolerance"><span>mm</span></label></div>
+            <div class="param-row"><span class="param-name">Ovality</span><span class="param-empty"></span>
+              <label class="unit-input"><input type="number" id="tol-ovality" step="0.1" min="0" aria-label="Max ovality"><span>% max</span></label></div>
+          </div>
 
-          <fieldset class="tol-fieldset">
-            <legend>Derived limits</legend>
-            <div class="tol-row">
-              <label>Max diagonal diff. (mm)<input type="number" id="tol-diag-diff" step="0.1" min="0"></label>
-              <label>Max camber (mm)<input type="number" id="tol-camber" step="0.1" min="0"></label>
-            </div>
-            <div class="tol-row">
-              <label>Max cross-section var. (mm)<input type="number" id="tol-cs-var" step="0.1" min="0"></label>
-              <label>Max surface anomaly score<input type="number" id="tol-surface" step="0.01" min="0" max="1"></label>
-            </div>
-            <div class="tol-row">
-              <label>Max edge irregularity (mm)<input type="number" id="tol-edge" step="0.1" min="0"></label>
-            </div>
-          </fieldset>
+          <div class="tol-section">
+            <h3 class="tol-heading">Shape &amp; surface limits</h3>
+            <div class="param-head"><span>Parameter</span><span></span><span>Maximum</span></div>
+            <div class="param-row"><span class="param-name">Diagonal difference</span><span class="param-empty"></span>
+              <label class="unit-input"><input type="number" id="tol-diag-diff" step="0.1" min="0" aria-label="Max diagonal difference"><span>mm</span></label></div>
+            <div class="param-row"><span class="param-name">Camber</span><span class="param-empty"></span>
+              <label class="unit-input"><input type="number" id="tol-camber" step="0.1" min="0" aria-label="Max camber"><span>mm</span></label></div>
+            <div class="param-row"><span class="param-name">Cross-section variation</span><span class="param-empty"></span>
+              <label class="unit-input"><input type="number" id="tol-cs-var" step="0.1" min="0" aria-label="Max cross-section variation"><span>mm</span></label></div>
+            <div class="param-row"><span class="param-name">Edge irregularity</span><span class="param-empty"></span>
+              <label class="unit-input"><input type="number" id="tol-edge" step="0.1" min="0" aria-label="Max edge irregularity"><span>mm</span></label></div>
+            <div class="param-row"><span class="param-name">Surface anomaly score</span><span class="param-empty"></span>
+              <label class="unit-input"><input type="number" id="tol-surface" step="0.01" min="0" max="1" aria-label="Max surface anomaly score"><span>0–1</span></label></div>
+          </div>
         </form>
 
-        <div id="tol-save-status" class="tol-status hidden"></div>
+        <div id="tol-save-status" class="tol-status inset hidden"></div>
       </section>
 
-      <section class="card" id="calibration-panel">
-        <div class="card-header">
-          <div>
-            <h2 class="card-title">Calibration</h2>
-            <p class="card-sub">Place the ArUco marker flat on the belt in view of the camera, then recalibrate.</p>
-          </div>
+      <section class="card card-flush" id="calibration-panel">
+        <div class="card-head">
+          <h2 class="card-title">Calibration</h2>
           <div class="toolbar">
-            <label class="inline-label">Marker side (mm)
-              <input type="number" id="cal-marker-mm" class="field field-num" value="50" step="1" min="1">
+            <label class="unit-input unit-input-sm" title="ArUco marker side length">
+              <input type="number" id="cal-marker-mm" value="50" step="1" min="1" aria-label="Marker side"><span>mm marker</span>
             </label>
             <button id="recalibrate-btn" class="btn btn-sm btn-primary"><svg class="icon"><use href="#i-ruler"/></svg>Recalibrate</button>
           </div>
         </div>
-        <dl class="meas-grid meas-grid-wide">
-          <dt>Scale</dt>          <dd id="cal-scale">—</dd>
-          <dt>Marker</dt>         <dd id="cal-marker">—</dd>
-          <dt>Calibrated at</dt>  <dd id="cal-when">—</dd>
-          <dt>Reprojection error</dt><dd id="cal-reproj">—</dd>
+        <dl class="kv-grid">
+          <div><dt>Scale</dt><dd id="cal-scale">—</dd></div>
+          <div><dt>Marker</dt><dd id="cal-marker">—</dd></div>
+          <div><dt>Calibrated</dt><dd id="cal-when">—</dd></div>
+          <div><dt>Reprojection error</dt><dd id="cal-reproj">—</dd></div>
         </dl>
-        <p class="tol-hint">The new scale is applied immediately and saved to <code>config/calibration.json</code>.</p>
-        <div id="cal-status" class="tol-status hidden"></div>
+        <div id="cal-status" class="tol-status inset hidden"></div>
       </section>
     </div>
 
   </main>
 
 
-  <!-- ── Drill-down Modal ──────────────────────────────────────────────────── -->
+  <!-- ── Drill-down modal ──────────────────────────────────────────────────── -->
   <div id="modal-backdrop" class="modal-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="modal-title">
     <div class="modal">
       <div class="modal-header">
@@ -400,6 +393,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=11"></script>
+  <script src="/static/app.js?v=15"></script>
 </body>
 </html>

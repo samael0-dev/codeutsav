@@ -40,6 +40,16 @@ ocr:
   heat_id_regex: "^[A-Z]\\d{5,7}$"
   enable_qr_barcode: true
 
+vit_fallback:                     # optional ViT (MobileSAM) re-segmentation; see requirements-vit.txt
+  enabled: false                  # off by default: the classical path is unchanged
+  model: "vit_t"                  # MobileSAM registry key
+  weights_path: "weights/mobile_sam.pt"
+  device: "cpu"
+  max_calls_per_billet: 3         # sharpest frames re-segmented per billet (latency guard)
+  trigger:                        # only billets whose classical result looks wrong are re-segmented
+    min_fill_ratio: 0.85          # contour area / min-area-rectangle area below this
+    max_size_error_pct: 15.0      # width/diameter this far off nominal is a segmentation error, not a defect
+
 decision:
   tolerances_file: "config/tolerances.yaml"
 

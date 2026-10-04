@@ -63,9 +63,9 @@ def test_validators_reject_garbage(tmp_path):
 
 def test_large_image_is_downscaled_and_roi_scales_with_frame(tmp_path):
     path = tmp_path / "big.png"
-    cv2.imwrite(str(path), np.zeros((2400, 3200, 3), np.uint8))
+    cv2.imwrite(str(path), np.zeros((4800, 6400, 3), np.uint8))
     meta = inputs.validate_image(path)
-    assert max(meta["width"], meta["height"]) == 1600
+    assert max(meta["width"], meta["height"]) == inputs._MAX_IMAGE_SIDE
     ov = inputs.image_overrides(path, meta)
     x1, y1, x2, y2 = ov["vision"]["roi_box"]
     assert 0 < x1 < x2 <= meta["width"] and 0 < y1 < y2 <= meta["height"]

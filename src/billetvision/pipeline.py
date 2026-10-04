@@ -39,7 +39,7 @@ from billetvision.annotate import draw_billet_card, draw_live_overlay
 from billetvision.api.mjpeg import latest_frame
 from billetvision.api.ws import ws_manager
 from billetvision.capture.frame_source import FrameSource
-from billetvision.decision.engine import evaluate, load_tolerances
+from billetvision.decision.engine import Verdict, evaluate, load_tolerances
 from billetvision.inputs import SourceInfo, frame_overrides
 from billetvision.logging_.db import InspectionRecord, billet_id_exists, fetch_recent, max_billet_seq
 from billetvision.logging_.writer import LogWriter
@@ -52,17 +52,31 @@ from billetvision.vision.measure import Measurement, measure
 from billetvision.vision.preprocess import to_gray
 from billetvision.vision.segment import BackgroundModel, segment
 from billetvision.vision.track import CentroidTracker, TrackedBillet
+from billetvision.vision.vit_segment import VitConfig, VitResult, refine_with_vit
 
 logger = logging.getLogger(__name__)
 
 _CROP_PAD_PX = 30          # context kept around each billet crop
 _CAMERA_LOST_S = 3.0       # no frames for this long → camera lost
 _RECONNECT_S = 2.0         # retry interval while the camera is lost
+_FIRST_FRAME_S = 25.0      # a freshly selected camera gets this long to deliver its first frame
 _RESULT_HOLD_S = 6.0       # how long the last result stays on the video overlay
 
 
 class SourceUnavailable(RuntimeError):
     """The requested input could not be opened (e.g. no camera at that index)."""
+
+
+def still_image_notes(complete: bool, scale_source: str, mm_per_px: float) -> List[str]:
+    """Reasons an uploaded photo's mm values are not trustworthy (empty = trust them)."""
+    notes: List[str] = []
+    if not complete:
+        notes.append("billet touches the edge of the photo — dimensions may be truncated; "
+                     "photograph the whole billet")
+    if scale_source != "marker":
+        notes.append(f"no calibration marker in the photo — mm values use the stored scale "
+                     f"({mm_per_px:.4f} mm/px) and are not verified for this camera")
+    return notes
 
 
 def _deep_merge(base: Dict[str, Any], extra: Dict[str, Any]) -> Dict[str, Any]:
@@ -179,6 +193,7 @@ class BilletVisionPipeline:
         self._tolerances: Dict[str, Any] = {}
         self._id_regex: str = r"^[A-Z]\d{5,7}$"
         self._min_confidence: float = 0.60
+        self._vit = VitConfig()                  # optional ViT segmentation fallback (off by default)
         self._batch_id: str = ""
         self._billet_seq: int = 0
         self._detect_duplicates = True
@@ -295,10 +310,16 @@ class BilletVisionPipeline:
             self.alert_manager.reset()
             try:
                 self.start()
-                if require_open and not self.source_opened:
-                    raise SourceUnavailable(
-                        f"Could not open {info.label} (is it connected and not used by another app?)"
-                    )
+                if require_open:
+                    if not self.source_opened:
+                        raise SourceUnavailable(
+                            f"Could not open {info.label} (is it connected and not used by another app?)"
+                        )
+                    if not self._source.wait_first_frame(_FIRST_FRAME_S):
+                        raise SourceUnavailable(
+                            f"{info.label} opened but delivered no frames within {_FIRST_FRAME_S:.0f} s "
+                            "(privacy shutter, another app using it, or a driver problem)"
+                        )
             except Exception:
                 logger.exception("Could not start source %r - restoring the previous one", info.label)
                 self._restore(prev)
@@ -409,6 +430,7 @@ class BilletVisionPipeline:
         ocr_cfg = self._cfg.get("ocr", {})
         self._id_regex = ocr_cfg.get("heat_id_regex", r"^[A-Z]\d{5,7}$")
         self._min_confidence = float(ocr_cfg.get("min_confidence", 0.60))
+        self._vit = VitConfig.from_dict(self._cfg.get("vit_fallback"))
 
         log_cfg = self._cfg.get("logging", {})
         self._snapshot_dir = Path(log_cfg.get("snapshot_dir", "data/outputs/snapshots"))
@@ -518,6 +540,7 @@ class BilletVisionPipeline:
             loop=bool(cap_cfg.get("loop", True)),  # loop video files for the demo
             fps=cap_cfg.get("fps_target", 15),
             repeat=int(cap_cfg.get("repeat", 1)),
+            backend=cap_cfg.get("backend"),
         )
 
     def _marker_size_mm(self) -> float:
@@ -614,6 +637,8 @@ class BilletVisionPipeline:
         src = self._source
         assert src is not None and self._tracker is not None
         live = src.mode == "webcam"
+        if getattr(src, "warming_up", False):
+            return last_reconnect   # still waking up: reconnecting now would restart the warm-up
         if not live and not self.loop_enabled and not src.is_alive():
             if not self.ended:
                 self.ended = True
@@ -632,6 +657,10 @@ class BilletVisionPipeline:
     @property
     def loop_enabled(self) -> bool:
         return bool(self._cfg.get("capture", {}).get("loop", True))
+
+    @property
+    def _still_image(self) -> bool:
+        return bool(self._cfg.get("vision", {}).get("still_image", False))
 
     def _reconnect(self) -> None:
         """Replace the frame source after a camera loss (best effort)."""
@@ -721,7 +750,8 @@ class BilletVisionPipeline:
         meas: Optional[Measurement] = None
         # Direct mode needs the whole billet in view; belt-speed mode accepts clipped
         # frames because only the cross-section (not the length) is read from them.
-        if complete or self._length_mode == "belt_speed":
+        # A still photo has no later frame to wait for: measure it, and flag it REVIEW.
+        if complete or self._length_mode == "belt_speed" or self._still_image:
             meas = measure(seg.contour, self._mm_per_px, shape=self._profile_shape, travel_axis="x")
             if complete:
                 mask = np.zeros(gray_crop.shape[:2], dtype=np.uint8)
@@ -771,9 +801,10 @@ class BilletVisionPipeline:
         t0 = time.perf_counter()
         self._billet_seq += 1
         seq = self._billet_seq
+        tol = self._tolerances.get(self._profile_name, {})
+        seg_fix = refine_with_vit(tb, self._vit, tol, self._mm_per_px, self._profile_shape)
         meas = tb.measurement
         self._apply_length_mode(tb)
-        tol = self._tolerances.get(self._profile_name, {})
         meas.defects = classify_defects(
             camber_mm=meas.camber_mm,
             cross_section_var_mm=meas.cross_section_var_mm,
@@ -802,9 +833,22 @@ class BilletVisionPipeline:
         if readout.status == "REVIEW":
             msg = readout.reason(self._min_confidence, self._id_regex)
             reasons = [msg] if verdict.status == "REVIEW" else [*reasons, msg]
+        if seg_fix.source == "unresolved":  # suspect outline the ViT could not fix: never pass it silently
+            reasons = [*reasons, seg_fix.note]
+            if verdict.status == "PASS":
+                verdict = Verdict(status="REVIEW", reasons=reasons)
+        if self._still_image:
+            notes = still_image_notes(
+                bool(tb.top_samples[0].extras.get("complete", True)), self._scale_source, self._mm_per_px
+            )
+            if notes:  # the mm values cannot be trusted, so neither PASS nor FAIL is a safe verdict
+                reasons = [*reasons, *notes]
+                verdict = Verdict(status="REVIEW", reasons=reasons)
         t_verdict = time.perf_counter()
 
-        image_path, frame_names = self._save_artifacts(tb, seq, meas, verdict.status, billet_id, reasons, readout)
+        image_path, frame_names = self._save_artifacts(
+            tb, seq, meas, verdict.status, billet_id, reasons, readout, seg_fix
+        )
         processing_ms = (time.perf_counter() - t0) * 1000
         record = InspectionRecord.make(
             billet_seq=seq,
@@ -827,7 +871,7 @@ class BilletVisionPipeline:
         self._writer.submit(record)
         self._seen_ids.add(billet_id)
         self._publish(record, reasons, readout, duplicate, image_path, t_verdict)
-        self._write_detail(tb, seq, meas, verdict.status, reasons, readout, frame_names, record)
+        self._write_detail(tb, seq, meas, verdict.status, reasons, readout, frame_names, record, seg_fix)
         logger.info("Billet #%d %s %s (%.0f ms)", seq, billet_id, verdict.status, processing_ms)
 
     def _is_duplicate(self, billet_id: str) -> bool:
@@ -891,13 +935,14 @@ class BilletVisionPipeline:
         billet_id: str,
         reasons: List[str],
         readout: IdReadout,
+        seg_fix: VitResult,
     ):
         """Write the annotated card, ID crop (REVIEW) and thumbnails; return (card path, thumb names)."""
         best = tb.top_samples[0]
         color = best.extras.get("color_crop")
         if color is None:
             color = cv2.cvtColor(best.frame_gray, cv2.COLOR_GRAY2BGR)
-        card = draw_billet_card(color, best.contour, meas, status, billet_id, reasons)
+        card = draw_billet_card(color, best.contour, meas, status, billet_id, reasons, seg_fix.mask_source)
         path = artifacts.save_snapshot(self._snapshot_dir, seq, card)
         if status == "REVIEW" or readout.status == "REVIEW":
             artifacts.save_id_crop(self._snapshot_dir, seq, readout.crop)
@@ -915,6 +960,7 @@ class BilletVisionPipeline:
         readout: IdReadout,
         frame_names: List[str],
         record: InspectionRecord,
+        seg_fix: VitResult,
     ) -> None:
         """Persist the drill-down JSON consumed by ``GET /api/billet/{seq}``."""
         def fields(m: Measurement) -> Dict[str, Any]:
@@ -935,6 +981,7 @@ class BilletVisionPipeline:
             "tolerances": dict(self._tolerances.get(self._profile_name, {})),
             "length_mode": self._length_mode,
             "mm_per_px": self._mm_per_px,
+            "mask_source": seg_fix.mask_source,
             "measurement": fields(meas),
             "defects": list(meas.defects),
             "frames": [

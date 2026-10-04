@@ -1,5 +1,6 @@
 """Unified FrameSource implementation supporting webcam, video file, and image folder modes with bounded drop-oldest queue."""
 import logging
+import sys
 from pathlib import Path
 import queue
 import re
@@ -14,8 +15,11 @@ from billetvision.capture.queue import DropOldestQueue
 
 logger = logging.getLogger(__name__)
 
-_MAX_READ_FAILURES = 30      # consecutive failed webcam reads (~1 s) before the capture gives up
+_MAX_READ_FAILURES = 30      # consecutive failed webcam reads (~1 s) before a streaming capture gives up
 _READ_RETRY_S = 0.03
+_WARMUP_S = 20.0             # a camera that has not produced its first frame yet gets this long to wake up
+_WARMUP_FAILURES = int(_WARMUP_S / _READ_RETRY_S)
+_BACKENDS = {"dshow": "CAP_DSHOW", "msmf": "CAP_MSMF"}
 SUPPORTED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
 
 
@@ -40,10 +44,15 @@ class FrameSource:
         delay: float = 0.0,
         pace: bool = True,
         repeat: int = 1,
+        backend: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         self.maxsize = int(maxsize)
         self.repeat = max(1, int(repeat))   # folder/image mode: frames emitted per image
+        # webcam: "dshow" | "msmf" | None.  None means DirectShow on Windows, where the OpenCV
+        # default (Media Foundation) often opens a camera but never delivers a frame.
+        self.backend = backend or ("dshow" if sys.platform == "win32" else None)
+        self.frames_received = 0
         self.loop = bool(loop)
         self._custom_fps = float(fps) if fps is not None else None
         self.delay = float(delay)
@@ -102,8 +111,10 @@ class FrameSource:
         self._eof = False
 
         if self.mode == "webcam":
-            self._cap = cv2.VideoCapture(self.source)
+            flag = getattr(cv2, _BACKENDS.get(str(self.backend).lower(), ""), None) if self.backend else None
+            self._cap = cv2.VideoCapture(self.source, flag) if flag is not None else cv2.VideoCapture(self.source)
             self.opened = bool(self._cap.isOpened())
+            logger.info("Webcam %d: backend=%s opened=%s", self.source, self.backend or "default", self.opened)
             if not self.opened:
                 logger.warning("Could not open webcam index %d", self.source)
             else:
@@ -163,8 +174,9 @@ class FrameSource:
                 ret, frame = self._cap.read()
                 if not ret or frame is None:
                     if self.mode == "webcam":
-                        failures += 1   # a dropped frame is not a lost camera
-                        if failures < _MAX_READ_FAILURES:
+                        failures += 1   # a dropped frame is not a lost camera, and a waking one is not dead
+                        limit = _MAX_READ_FAILURES if self.frames_received else _WARMUP_FAILURES
+                        if failures < limit:
                             time.sleep(_READ_RETRY_S)
                             continue
                         break
@@ -178,6 +190,7 @@ class FrameSource:
                 failures = 0
 
                 self.queue.put(frame)
+                self.frames_received += 1
 
                 if interval > 0 and not self._stop_event.is_set():
                     elapsed = time.perf_counter() - t0
@@ -236,6 +249,20 @@ class FrameSource:
                     return False, None
                 if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                     return False, None
+
+    @property
+    def warming_up(self) -> bool:
+        """Webcam that is open but has not delivered its first frame yet (still waking up)."""
+        return self.mode == "webcam" and self._running and self.frames_received == 0
+
+    def wait_first_frame(self, timeout: float) -> bool:
+        """Block until the first frame arrives; False if the source died or ``timeout`` passed."""
+        end = time.perf_counter() + timeout
+        while self.frames_received == 0:
+            if not self._running or time.perf_counter() >= end:
+                return self.frames_received > 0
+            time.sleep(0.05)
+        return True
 
     def get_frame(self, timeout: Optional[float] = 1.0) -> Optional[np.ndarray]:
         """Convenience method returning frame directly, or None if unavailable/ended."""
